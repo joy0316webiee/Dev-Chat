@@ -2,6 +2,7 @@ import React, { Component } from "react";
 import { Link } from "react-router-dom";
 
 import firebase from "../../firebase";
+import md5 from "md5";
 
 import {
   Grid,
@@ -19,7 +20,9 @@ class Register extends Component {
     email: "",
     password: "",
     passwordConfirmation: "",
-    errors: []
+    errors: [],
+    loading: false,
+    usersRef: firebase.database().ref("users")
   };
 
   isFormValid = () => {
@@ -62,23 +65,61 @@ class Register extends Component {
     return errors.map((error, i) => <p key={i}>{error.message}</p>);
   };
 
+  saveUser = createdUser => {
+    return this.state.usersRef.child(createdUser.user.uid).set({
+      name: createdUser.user.displayName,
+      avatar: createdUser.user.photoURL
+    });
+  };
+
   handleChange = event => {
     this.setState({ [event.target.name]: event.target.value });
   };
 
   handleSubmit = event => {
+    event.preventDefault();
+
     if (this.isFormValid()) {
-      event.preventDefault();
+      this.setState({ errors: [], loading: true });
+
       firebase
         .auth()
         .createUserWithEmailAndPassword(this.state.email, this.state.password)
         .then(createdUser => {
-          console.log(createdUser);
+          createdUser.user
+            .updateProfile({
+              displayName: this.state.username,
+              photoURL: `http://gravatar.com/avatar/${md5(
+                createdUser.user.email
+              )}?d=identicon`
+            })
+            .then(() => {
+              this.saveUser(createdUser).then(() => {
+                console.log("user saved");
+              });
+            })
+            .catch(err => {
+              console.error(err);
+              this.setState({
+                errors: this.state.errors.concat(err),
+                loading: false
+              });
+            });
         })
         .catch(err => {
           console.error(err);
+          this.setState({
+            errors: this.state.errors.concat(err),
+            loading: false
+          });
         });
     }
+  };
+
+  handleInputError = (errors, inputName) => {
+    return errors.some(error => error.message.toLowerCase().includes(inputName))
+      ? "error"
+      : "";
   };
 
   render() {
@@ -87,13 +128,14 @@ class Register extends Component {
       email,
       password,
       passwordConfirmation,
-      errors
+      errors,
+      loading
     } = this.state;
 
     return (
       <Grid textAlign="center" verticalAlign="middle" className="app">
         <Grid.Column style={{ maxWidth: 450 }}>
-          <Header as="h2" icon color="orange" textAlign="center">
+          <Header as="h1" icon color="orange" textAlign="center">
             <Icon name="puzzle piece" color="orange" />
             Register for DevChat
           </Header>
@@ -118,6 +160,7 @@ class Register extends Component {
                 icon="mail"
                 iconPosition="left"
                 placeholder="Email Address"
+                className={this.handleInputError(errors, "email")}
                 onChange={this.handleChange}
               />
 
@@ -129,6 +172,7 @@ class Register extends Component {
                 icon="lock"
                 iconPosition="left"
                 placeholder="Password"
+                className={this.handleInputError(errors, "password")}
                 onChange={this.handleChange}
               />
 
@@ -140,10 +184,17 @@ class Register extends Component {
                 icon="repeat"
                 iconPosition="left"
                 placeholder="Password Confirmation"
+                className={this.handleInputError(errors, "password")}
                 onChange={this.handleChange}
               />
 
-              <Button fluid size="large" color="orange">
+              <Button
+                disabled={loading}
+                className={loading ? "loading" : ""}
+                fluid
+                size="large"
+                color="orange"
+              >
                 Submit
               </Button>
             </Segment>
