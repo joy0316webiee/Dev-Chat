@@ -20,7 +20,7 @@ class Channels extends React.Component {
     this.addListeners();
   }
 
-  componentWillMount() {
+  componentWillUnmount() {
     this.removeListeners();
   }
 
