@@ -13,7 +13,9 @@ class Messages extends React.Component {
     messages: [],
     messageLoading: true,
     channel: this.props.currentChannel,
+    isChannelStarred: false,
     user: this.props.currentUser,
+    usersRef: firebase.database().ref("users"),
     progressBar: false,
     numUniqueUsers: "",
     searchTerm: "",
@@ -26,8 +28,23 @@ class Messages extends React.Component {
 
     if (channel && user) {
       this.addListeners(channel.id);
+      this.addUsersStarsListener(channel.id, user.uid);
     }
   }
+
+  addUsersStarsListener = (channelId, userId) => {
+    this.state.usersRef
+      .child(userId)
+      .child("starred")
+      .once("value")
+      .then(data => {
+        if (data.val() !== null) {
+          const channelIds = Object.keys(data.val());
+          const prevStarred = channelIds.includes(channelId);
+          this.setState({ isChannelStarred: prevStarred });
+        }
+      });
+  };
 
   addListeners = channelId => {
     this.addMessageListener(channelId);
@@ -87,6 +104,39 @@ class Messages extends React.Component {
     return privateChannel ? privateMessagesRef : messagesRef;
   };
 
+  handleStar = () => {
+    this.setState(
+      prevState => ({
+        isChannelStarred: !prevState.isChannelStarred
+      }),
+      () => this.starChannel()
+    );
+  };
+
+  starChannel = () => {
+    if (this.state.isChannelStarred) {
+      this.state.usersRef.child(`${this.state.user.uid}/starred`).update({
+        [this.state.channel.id]: {
+          name: this.state.channel.name,
+          details: this.state.channel.details,
+          createdBy: {
+            name: this.state.channel.createdBy.name,
+            avatar: this.state.channel.createdBy.avatar
+          }
+        }
+      });
+    } else {
+      this.state.usersRef
+        .child(`${this.state.user.uid}/starred`)
+        .child(this.state.channel.id)
+        .remove(err => {
+          if (err !== null) {
+            console.error(err);
+          }
+        });
+    }
+  };
+
   handleSearchChange = event => {
     this.setState(
       { searchTerm: event.target.value, searchLoading: true },
@@ -115,7 +165,7 @@ class Messages extends React.Component {
   render() {
     // prettier-ignore
     const { messagesRef, channel, user, messages, progressBar, numUniqueUsers,
-      searchTerm, searchResults, searchLoading, privateChannel } = this.state;
+      searchTerm, searchResults, searchLoading, privateChannel, isChannelStarred } = this.state;
 
     return (
       <React.Fragment>
@@ -125,6 +175,8 @@ class Messages extends React.Component {
           numUniqueUsers={numUniqueUsers}
           searchLoading={searchLoading}
           isPrivateChannel={privateChannel}
+          handleStar={this.handleStar}
+          isChannelStarred={isChannelStarred}
         />
 
         <Segment>
